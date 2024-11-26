@@ -1,0 +1,9 @@
+numpy
+pandas
+requests
+scikit-learn
+flask
+flask-classful
+gunicorn
+paho-mqtt
+psycopg
