@@ -1,106 +1,126 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-# @Time    : 2024/10/22 18:32
-# @Author  : Fred Livingston (fjliving@ncsu.edu)
-
-# Cntr + Shift + P -> Python: Select Interpreter -> Python 3.11.9 64-bit ('smartm': conda) -> Enter
-from flask import Flask
-from flask import render_template
-from flask import request, jsonify
+from flask import Flask, render_template, request, redirect, url_for
 import paho.mqtt.client as mqtt_client
-import json
-from flask_classful import FlaskView
-import psycopg as pg
+from sqlalchemy import create_engine,text
+from datetime import datetime
+
 import pandas as pd
-
-# Dependencies
-#pip install Flask # for web server
-#pip install Flask-Classful # for class-based views
-#pip install psycopg2    # for postgresql
-#pip install pandas  # for data manipulation
-#pip install paho-mqtt # for mqtt
-
+import json
 
 app = Flask(__name__)
 
-class ClientApp(FlaskView):
-    def __init__(self, mqtt_host_address, db_host_address):
-        # instantiate an object:
-        self.mqtt_host =  mqtt_host_address 
-        self.mqtt_port = 1883
-        self.mqtt_keep_alive = 60
-        self.db_host_address = db_host_address
+# MQTT Configuration
+#mqtt_host = "broker.hivemq.com"
+mqtt_host = "test.mosquitto.org"
+mqtt_port = 1883
+mqtt_topic = "FWH/ISE589FinalProj/SystemCommand"
 
-        # Initialize MQTT Client
-        self. _init_mqtt()
-        print("MQTT Client Initialized")
+# SQLAlchemy Configuration
+#db_uri = "postgresql://sm_grp1_db_user:w7WVszIjZUoq4KY09rfKQNzTIVq5WBrQ@dpg-csps6clumphs73dtgoq0-a.ohio-postgres.render.com/sm_grp1_db"
+db_uri = "postgresql://sorting_line_project_ise_user:RVDVnL6nRPM8ym5OnP2HMbUE9h2pcALL@dpg-ct347f5umphs73do9d60-a.oregon-postgres.render.com/sorting_line_project_ise"
+engine = create_engine(db_uri)
 
-        # Initialize DB Client
-        self._init_db_client()
-        print("DB Client Initialized")
-   
+# Fetch Latest Counters
+def fetch_latest_counters():
+    query = text('SELECT redcountervalue, whitecountervalue, unknowncountervalue, systemenable, sr_no FROM public.sensor_data ORDER BY sr_no DESC LIMIT 1;')
+    try:
+        with engine.connect() as connection:
+            result = connection.execute(query).fetchone()
+            if result:
+                status = result[3].strip().lower() == "true"
+                return {
+                    "red": result[0] if result[0] is not None else 0,
+                    "white": result[1] if result[1] is not None else 0,
+                    "unknown": result[2] if result[2] is not None else 0,
+                    "status": status,
+                    "last_checked_time": datetime.now().strftime('%I:%M:%S %p on %B %d, %Y')  # 12-hour format with AM/PM
+                }
+    except Exception as e:
+        print(f"Error fetching counters: {e}")
+        return {
+            "red": 0,
+            "white": 0,
+            "unknown": 0,
+            "status": False,
+            "last_checked_time": datetime.now().strftime('%I:%M:%S %p on %B %d, %Y')}
 
-        @app.route('/control', methods=['GET', 'POST', 'DELETE', 'PATCH'])
-        def index():
-            # send form to the user
-            if request.method == 'GET':
-                return render_template('widget_mqtt_postgres.html')
+
+# Query Database
+def query_database():
+    query = text('SELECT * FROM public."sensor_data" LIMIT 100')
+    try:
+        return pd.read_sql_query(query, engine)
+    except Exception as e:
+        print(f"Database error: {e}")
+        return pd.DataFrame()
+
+# Root Route
+@app.route('/')
+def root():
+    # Redirect to /control
+    return redirect(url_for('index'))
+
+# Control Route
+@app.route('/control', methods=['GET', 'POST'])
+def index():
+    current_counters = fetch_latest_counters()
+
+    # Always ensure `last_checked_time` is passed
+    last_checked_time = current_counters.get("last_checked_time", datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+
+    if request.method == 'GET':
+        return render_template(
+            'widget_mqtt_postgres_new.html',
+            counters=current_counters,
+            last_checked_time=last_checked_time
+        )
     
-            if request.method == 'POST':
-                action = request.form.get("action") 
-                print(action)
-        
-            if(action == "Start Controller"):
-                self._enabled_disable_system(True)
-        
-            if(action == "Stop Controller"):
-                self._enabled_disable_system(False)
+    if request.method == 'POST':
+        action = request.form.get("action")
 
-            if(action == "Query DB"):
-                df = self._queryDB()
-                return render_template('widget_mqtt_postgres.html', tables=[df.to_html(classes='data')], titles=df.columns.values ) 
-            
-            return render_template('widget_mqtt_postgres.html')
-        
-    def _init_mqtt(self):
-        # Initialize MQTT Client
-        try:
-            self.mqttc = mqtt_client.Client()
-            self.mqttc.connect(self.mqtt_host, self.mqtt_port, self.mqtt_keep_alive)
-        except Exception as e:
-            print("Error in MQTT Client Initialization: ", e)
+        if action == "Query DB":
+            df = query_database()
+            table_data = {
+                "columns": df.columns.values.tolist(),
+                "data": df.values.tolist()
+            }
+            return render_template(
+                'widget_mqtt_postgres_new.html',
+                tables=[table_data],
+                titles=["Sensor Data"],
+                counters=current_counters,
+                last_checked_time=last_checked_time
+            )
 
-    def _init_db_client(self):
-        self.db_client = pg.connect(self.db_host_address,sslmode="require")
-        try:
-            self.db_cursor = self.db_client.cursor()
-            print("Connection Established")
-        except (Exception, pg.DatabaseError) as error:
-            print(error)
+        elif action == "Activate System":
+            publish_message(True)
+        elif action == "Deactivate System":
+            publish_message(False)
 
-    def _enabled_disable_system(self, enable):
-        mqtt_topic = "FWH/ISE589finalproj/systemcommand"
-        dataObj={}
-        dataObj["enable system"] = enable
-        jsondata = json.dumps(dataObj)
-        self. _init_mqtt()
-        self.mqttc.publish(mqtt_topic, jsondata)
-        print ("Controller: ", enable)
+        # Render the page again with updated counters and timestamp
+        current_counters = fetch_latest_counters()
+        last_checked_time = current_counters.get("last_checked_time", datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        return render_template(
+            'widget_mqtt_postgres_new.html',
+            counters=current_counters,
+            last_checked_time=last_checked_time
+        )
 
-    def _queryDB(self):
-        qCmd = """SELECT t.* FROM public."sensor_data5" t LIMIT 100 """
-        df = pd.read_sql_query(qCmd, self.db_client) # read the query into a pandas dataframe
-        print(df) # print the dataframe
-        # Now that we have the data as a dataframe, we can manipulate it as needed
-        # and utilize it in our web application and machine learning models
-        return df
+    return render_template('widget_mqtt_postgres_new.html', counters=current_counters, last_checked_time=last_checked_time)
 
-# mqtt_host = "10.155.14.88" Can be used for local testing        
-#mqtt_host = "test.mosquitto.org"
-mqtt_host = "broker.hivemq.com"
-db_host = "postgresql://sorting_line_project_ise_user:RVDVnL6nRPM8ym5OnP2HMbUE9h2pcALL@dpg-ct347f5umphs73do9d60-a.oregon-postgres.render.com/sorting_line_project_ise"
 
-app_client = ClientApp(mqtt_host, db_host)
-ClientApp.register(app) # Register the class with the app
-# app.run(debug=True) # Run the app locally
-app.run(debug=True, host='0.0.0.0', port=5001) # Render the app on the network
+
+
+
+# Publish MQTT Message
+def publish_message(enable):
+    client = mqtt_client.Client()
+    try:
+        client.connect(mqtt_host, mqtt_port)
+        data = {"enable system": enable}
+        client.publish(mqtt_topic, json.dumps(data))
+    except Exception as e:
+        print(f"Error publishing MQTT message: {e}")
+
+# Run the App
+if __name__ == "__main__":
+    app.run(debug=True, host='0.0.0.0')
