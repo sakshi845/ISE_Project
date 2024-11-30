@@ -10,3 +10,4 @@ psycopg
 sqlalchemy
 datetime
 psycopg2
+pytz
