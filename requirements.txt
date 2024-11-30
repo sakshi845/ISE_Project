@@ -7,3 +7,6 @@ flask-classful
 gunicorn
 paho-mqtt
 psycopg
+sqlalchemy
+datetime
+json
