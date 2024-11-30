@@ -9,4 +9,3 @@ paho-mqtt
 psycopg
 sqlalchemy
 datetime
-json
