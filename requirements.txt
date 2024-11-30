@@ -9,3 +9,4 @@ paho-mqtt
 psycopg
 sqlalchemy
 datetime
+psycopg2
