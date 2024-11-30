@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart System Controller</title>
+  <!-- Add Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      background-color: #f8f9fa;
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    .controller-panel {
+      max-width: 500px;
+      margin: 50px auto;
+      background: white;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .controller-header {
+      background: #007bff;
+      color: white;
+      text-align: center;
+      padding: 20px;
+    }
+    .controller-buttons {
+      padding: 20px;
+      text-align: center;
+    }
+    .controller-buttons input {
+      margin: 10px 0;
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 5px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    .controller-buttons input:hover {
+      background-color: #0056b3;
+      color: white;
+    }
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 15px;
+    }
+    .status-light {
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      margin-right: 10px;
+      transition: background-color 0.3s;
+    }
+    .status-light.active {
+      background-color: green; /* Green for active */
+    }
+    .status-light.inactive {
+      background-color: red; /* Red for inactive */
+    }
+    .status-text {
+      font-size: 14px;
+      font-weight: bold;
+    }
+    .counters-section {
+      margin-top: 30px;
+      padding: 20px;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+    .counter-display {
+      margin: 10px 0;
+    }
+    .counter-display h4 {
+      font-size: 18px;
+      margin-bottom: 10px;
+    }
+    .counter-display p {
+      font-size: 24px;
+      font-weight: bold;
+      color: #007bff;
+    }
+    .tables-section {
+      margin-top: 30px;
+    }
+    .table-title {
+      font-size: 18px;
+      font-weight: bold;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Header Section -->
+  <div class="controller-panel">
+    <div class="controller-header">
+      <h1>Sorting Line Controller</h1>
+    </div>
+    <!-- Form Section -->
+    <div class="controller-buttons">
+      <!-- Status Indicator -->
+      <div class="status-indicator">
+        <span class="status-text">
+          Last System Status: 
+        </span>
+        <span class="status-light {{ 'active' if counters['status'] else 'inactive' }}" style="margin-left: 5px; margin-right: 5px;"></span>
+        <span class="status-text">
+          <strong>{{ 'Active' if counters['status'] else 'Inactive' }}</strong>
+        </span>
+        <span class="status-timestamp" style="font-size: 12px; color: grey; margin-left: 5px;">
+          at {{ last_checked_time }}
+        </span>
+      </div>
+      
+      
+      
+      
+      <form id="package_form" action="" method="post">
+        <input type="submit" name="action" value="Activate System" class="btn btn-primary">
+        <input type="submit" name="action" value="Deactivate System" class="btn btn-danger">
+        <input type="submit" name="action" value="Query DB" class="btn btn-secondary">
+      </form>
+    </div>
+  </div>
+
+  <!-- Counters Section -->
+  <div class="counters-section container mt-4">
+    <h3 class="text-center">System Counters</h3>
+    <div class="row text-center">
+      <div class="col">
+        <div class="counter-display">
+          <h4>Red Counter</h4>
+          <p id="red-counter">{{ counters['red'] }}</p>
+        </div>
+      </div>
+      <div class="col">
+        <div class="counter-display">
+          <h4>White Counter</h4>
+          <p id="white-counter">{{ counters['white'] }}</p>
+        </div>
+      </div>
+      <div class="col">
+        <div class="counter-display">
+          <h4>Unknown Counter</h4>
+          <p id="unknown-counter">{{ counters['unknown'] }}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Table Section -->
+  <div class="tables-section container mt-4">
+    {% if tables %}
+      {% for table in tables %}
+        <div class="table-title">{{ titles[loop.index - 1] }}</div>
+        <div class="table-responsive">
+          <table class="table table-striped table-bordered table-hover">
+            <thead class="thead-dark">
+              <tr>
+                {% for column in table.columns %}
+                  <th scope="col">{{ column }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in table.data %}
+                <tr>
+                  {% for cell in row %}
+                    <td>{{ cell }}</td>
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endfor %}
+    {% else %}
+      <p class="text-center">No data to display.</p>
+    {% endif %}
+  </div>
+  
+  
+
+  <!-- Add Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
