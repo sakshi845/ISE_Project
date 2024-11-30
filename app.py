@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for
 import paho.mqtt.client as mqtt_client
 from sqlalchemy import create_engine,text
 from datetime import datetime
+import pytz
 
 import pandas as pd
 import json
@@ -25,6 +26,11 @@ def fetch_latest_counters():
     try:
         with engine.connect() as connection:
             result = connection.execute(query).fetchone()
+
+            # Set the specific timezone
+            timezone = pytz.timezone("America/New_York")  # Change this to your desired timezone
+            localized_time = datetime.now(pytz.utc).astimezone(timezone)
+
             if result:
                 status = result[3].strip().lower() == "true"
                 return {
@@ -32,16 +38,21 @@ def fetch_latest_counters():
                     "white": result[1] if result[1] is not None else 0,
                     "unknown": result[2] if result[2] is not None else 0,
                     "status": status,
-                    "last_checked_time": datetime.now().strftime('%I:%M:%S %p on %B %d, %Y')  # 12-hour format with AM/PM
+                    "last_checked_time": localized_time.strftime('%I:%M:%S %p on %B %d, %Y')  # 12-hour time with AM/PM
                 }
     except Exception as e:
         print(f"Error fetching counters: {e}")
+
+        # Set default time with specific timezone
+        timezone = pytz.timezone("America/New_York")
+        localized_time = datetime.now(pytz.utc).astimezone(timezone)
         return {
             "red": 0,
             "white": 0,
             "unknown": 0,
             "status": False,
-            "last_checked_time": datetime.now().strftime('%I:%M:%S %p on %B %d, %Y')}
+            "last_checked_time": localized_time.strftime('%I:%M:%S %p on %B %d, %Y')
+        }
 
 
 # Query Database
